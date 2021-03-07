@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ResourceCompile Include="KeeneticPlugin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="KeeneticPlugin.cpp" />
+    <ClCompile Include="Core\Network\CurlShare.cpp">
+      <Filter>Core\Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Network\NetworkClient.cpp">
+      <Filter>Core\Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Utils\CoreUtils.cpp">
+      <Filter>Core\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Utils\StringUtils.cpp">
+      <Filter>Core\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Utils\Utils_win.cpp">
+      <Filter>Core\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Utils\CryptoUtils.cpp">
+      <Filter>Core\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\Utils\CryptoUtils_win.cpp">
+      <Filter>Core\Utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{c5001e88-dc5b-4565-ad84-36219f0015bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Utils">
+      <UniqueIdentifier>{33abbca2-1e88-4590-9ae9-65f47e4a7977}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Network">
+      <UniqueIdentifier>{3e75daed-dff8-4a82-987f-30bc2214da5c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\Network\CurlShare.h">
+      <Filter>Core\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Network\INetworkClient.h">
+      <Filter>Core\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Network\NetworkClient.h">
+      <Filter>Core\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utils\CoreTypes.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utils\CoreUtils.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utils\StringUtils.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utils\CryptoUtils.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+</Project>
