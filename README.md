@@ -17,3 +17,5 @@ User=admin
 Password=qwerty1234
 URL=http://192.168.1.1
 ```
+
+Plugin has been tested with Keenetic Viva (KN-1910).
