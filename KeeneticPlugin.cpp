@@ -118,7 +118,7 @@ PLUGIN_EXPORT double Update(void* data)
 		if (!data2.empty()) {
 			Json::Value download = *data2.begin();
 			double dlSpeed = download["v"].asDouble();
-			return dlSpeed / 1048576.0;
+			return dlSpeed / 1000000.0;
 		}
 	}
 
