@@ -13,7 +13,7 @@ Also you can specify the username and URL of the router web interface.
 
 ```ini
 [KeeneticPlugin]
-User=admin
+Login=admin
 Password=qwerty1234
 URL=http://192.168.1.1
 ```
