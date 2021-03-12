@@ -462,7 +462,8 @@ bool NetworkClient::doPost(const std::string& data)
         }
 
     if(data.empty()) {
-        curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, postData.c_str());
+        curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, postData.data());
+        curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, (long)postData.length());
     }
     else {
         curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, (const char*)data.data());
