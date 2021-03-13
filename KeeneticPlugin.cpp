@@ -83,6 +83,7 @@ public:
         while (!stopSignal) {
             if (!authenticated) {
                 if (!authenticate()) {
+                    Sleep(1000);
                     continue;
                 }
             }
