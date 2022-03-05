@@ -1,5 +1,6 @@
 #include <Windows.h>
 
+#include <sstream>
 #include <thread>
 
 #include <json/json.h>

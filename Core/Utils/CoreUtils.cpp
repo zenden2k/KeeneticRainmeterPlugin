@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <sstream>
 
 #ifdef _WIN32
     #include <WinSock.h>
