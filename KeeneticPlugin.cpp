@@ -282,7 +282,9 @@ PLUGIN_EXPORT double Update(void* data) {
 
 PLUGIN_EXPORT void Finalize(void* data) {
     auto* measure = static_cast<Measure*>(data);
-    measure->worker->abort();
+    if (measure->worker) {
+        measure->worker->abort();
+    }
     delete measure;
     worker.reset();
 }
