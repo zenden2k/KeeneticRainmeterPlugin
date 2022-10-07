@@ -188,6 +188,7 @@ private:
     }
 
     void loadData() {
+        bool success = false;
         nc_->setUrl(settings_->routerUrl + "/rci/");
         std::string s =
             R"({"show":{"interface":{"rrd":[{"name":"ISP","attribute":"rxspeed","detail":0},{"name":"ISP","attribute":"txspeed","detail":0}]}}})";
@@ -212,6 +213,7 @@ private:
                     Json::Value upload = *data3.begin();
                     uploadSpeed_ = upload["v"].asDouble() / 1000000.0;
                 }
+                success = true;
             }
         }
         else {
@@ -222,6 +224,11 @@ private:
                 + std::to_wstring(nc_->responseCode()) + L", CURL error: " + IuCoreUtils::Utf8ToWstring(nc_->errorString());
 
             RmLog(rm_, LOG_ERROR, msg.c_str());
+        }
+
+        if (!success) {
+            downloadSpeed_ = 0.0;
+            uploadSpeed_ = 0.0;
         }
     }
 };
