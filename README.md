@@ -16,10 +16,25 @@ Also you can specify the username and URL of the router web interface.
 Login=admin
 Password=qwerty1234
 URL=http://192.168.1.1
+Interface=ISP
 ```
 
 Plugin has been tested with Keenetic Viva (KN-1910).
 
+## Obtaining interface name (optional)
+
+Connect to your router with **telnet**:
+
+```
+telnet 192.168.1.1
+```
+and run command
+
+```
+show interface
+```
+
+All interfaces will be listed.
 
 ## Building from sources
 

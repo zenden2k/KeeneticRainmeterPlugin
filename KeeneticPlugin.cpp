@@ -22,6 +22,7 @@ struct Settings{
     std::string login;
     std::string password;
     std::string proxy;
+    std::string interf;
     int proxyPort = 0;
 };
 
@@ -33,11 +34,13 @@ public:
         WCHAR passwordW[256]{};
         WCHAR urlW[256]{};
         WCHAR proxyW[256]{};
+        WCHAR interfaceW[256]{};
 
         GetPrivateProfileString(L"KeeneticPlugin", L"URL", L"http://192.168.1.1", urlW, 256, rmDataFile);
         GetPrivateProfileString(L"KeeneticPlugin", L"Login", L"admin", loginW, 256, rmDataFile);
         GetPrivateProfileString(L"KeeneticPlugin", L"Password", L"", passwordW, 256, rmDataFile);
         GetPrivateProfileString(L"KeeneticPlugin", L"Proxy", L"", proxyW, 256, rmDataFile);
+        GetPrivateProfileString(L"KeeneticPlugin", L"Interface", L"ISP", interfaceW, 256, rmDataFile);
 
         if (!lstrlen(passwordW)) {
             RmLog(rm, LOG_ERROR, (std::wstring(L"No password set for KeeneticPlugin in config file ") + rmDataFile).c_str());
@@ -52,7 +55,7 @@ public:
         res->login = IuCoreUtils::WstringToUtf8(loginW);
         res->password = IuCoreUtils::WstringToUtf8(passwordW);
         res->proxy = IuCoreUtils::WstringToUtf8(proxyW);
-
+        res->interf = IuCoreUtils::WstringToUtf8(interfaceW);
         return res;
     }
 };
@@ -190,8 +193,33 @@ private:
     void loadData() {
         bool success = false;
         nc_->setUrl(settings_->routerUrl + "/rci/");
-        std::string s =
+
+        Json::Value rrd1;
+        rrd1["name"] = settings_->interf;
+        rrd1["attribute"] = "rxspeed";
+        rrd1["detail"] = 0;
+
+        Json::Value rrd2;
+        rrd2["name"] = settings_->interf;
+        rrd2["attribute"] = "txspeed";
+        rrd2["detail"] = 0;
+
+        Json::Value rrd(Json::arrayValue);
+        rrd.append(rrd1);
+        rrd.append(rrd2);
+
+        Json::Value root;
+        root["show"]["interface"]["rrd"] = rrd;
+
+        Json::StreamWriterBuilder builder;
+        builder["commentStyle"] = "None";
+        builder["indentation"] = "   ";
+        std::string s = Json::writeString(builder, root);
+
+        /*std::string s =
             R"({"show":{"interface":{"rrd":[{"name":"ISP","attribute":"rxspeed","detail":0},{"name":"ISP","attribute":"txspeed","detail":0}]}}})";
+        */
+
         nc_->addQueryHeader("Content-Type", "application/json");
         nc_->doPost(s);
 
@@ -199,21 +227,44 @@ private:
             Json::Value val;
             Json::Reader reader;
             if (reader.parse(nc_->responseBody(), val, false)) {
-                Json::Value rrd = val["show"]["interface"]["rrd"];
-                //int index = measure->mt == MeasureType::mtUpload ? 1 : 0;
-                std::unique_lock<std::mutex> lk(dataMutex_);
-                Json::Value data2 = rrd[0]["data"];
-                if (!data2.empty()) {
-                    Json::Value download = *data2.begin();
-                    downloadSpeed_ = download["v"].asDouble() / 1000000.0;
-                }
+                try {
+                    Json::Value& rrdObj = val["show"]["interface"]["rrd"];
+                    if (rrdObj.isArray()) {
+                        //int index = measure->mt == MeasureType::mtUpload ? 1 : 0;
+                        std::unique_lock<std::mutex> lk(dataMutex_);
 
-                Json::Value data3 = rrd[1]["data"];
-                if (!data3.empty()) {
-                    Json::Value upload = *data3.begin();
-                    uploadSpeed_ = upload["v"].asDouble() / 1000000.0;
+                        Json::Value& status = rrdObj[0]["status"];
+
+                        if (status.isArray() && status[0]["status"] == "error") {
+                            std::wstring msg = std::wstring(L"Server answered with error: ") +
+                                IuCoreUtils::Utf8ToWstring(status[0]["message"].asCString());
+                            RmLog(rm_, LOG_ERROR, msg.c_str());
+                        }
+
+                        Json::Value& data2 = rrdObj[0]["data"];
+
+                        if (!data2.empty()) {
+                            Json::Value download = *data2.begin();
+                            downloadSpeed_ = download["v"].asDouble() / 1000000.0;
+                        }
+
+                        Json::Value& status2 = rrdObj[1]["status"];
+                        if (status2.isArray() && status2[0]["status"] == "error") {
+                            std::wstring msg = std::wstring(L"Server answered with error: ") +
+                                IuCoreUtils::Utf8ToWstring(status2[0]["message"].asCString());
+                            RmLog(rm_, LOG_ERROR, msg.c_str());
+                        }
+
+                        Json::Value& data3 = rrdObj[1]["data"];
+                        if (!data3.empty()) {
+                            Json::Value upload = *data3.begin();
+                            uploadSpeed_ = upload["v"].asDouble() / 1000000.0;
+                        }
+                        success = true;
+                    }
+                } catch (const std::exception& ex) {
+                    RmLog(rm_, LOG_ERROR, IuCoreUtils::Utf8ToWstring(ex.what()).c_str());
                 }
-                success = true;
             }
         }
         else {
