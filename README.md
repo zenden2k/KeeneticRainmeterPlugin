@@ -36,6 +36,38 @@ show interface
 
 All interfaces will be listed.
 
+## Multiple interfaces and routers
+
+You can specify multiple interfaces of the same router in "Rainmeter.data" file separating them with comma:
+
+```
+[KeeneticPlugin]
+Interface=ISP,Wireguard0
+```
+Now specify the interface of a [Measure](https://docs.rainmeter.net/manual/measures/) in the skin file.
+
+This plugin can be used with multiple routers.
+You can create multiple sections with parameters in "Rainmeter.data" file. 
+Then you can use section name as Router option of a Measure in the skin file: 
+
+```
+[MeasureDownloadSpeed]
+Measure=Plugin
+Plugin=KeeneticRainmeterPlugin
+Type=download
+Interface=Wireguard0
+Router=MyRouter
+
+[MeasureUploadSpeed]
+Measure=Plugin
+Plugin=KeeneticRainmeterPlugin
+Type=upload
+Interface=Wireguard0
+Router=MyRouter
+```
+
+The default value for the Router option is "KeeneticPlugin". 
+
 ## Building from sources
 
 To build this plugin from source files you will need:
