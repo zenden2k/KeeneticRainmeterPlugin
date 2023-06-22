@@ -2,11 +2,13 @@
 
 #include <sstream>
 #include <thread>
+#include <map>
 
 #include <json/json.h>
 #include "Core/Network/NetworkClient.h"
 #include "API/RainmeterAPI.h"
 #include "Core/Utils/CryptoUtils.h"
+#include "Core/Utils/StringUtils.h"
 
 enum class MeasureType
 {
@@ -14,7 +16,6 @@ enum class MeasureType
     mtUpload
 };
 
-LPCWSTR rmDataFile = nullptr;
 class Worker;
 
 struct Settings{
@@ -22,40 +23,41 @@ struct Settings{
     std::string login;
     std::string password;
     std::string proxy;
-    std::string interf;
+    std::vector<std::string> interfaces;
     int proxyPort = 0;
 };
 
 class SettingsLoader
 {
 public:
-    static std::unique_ptr<Settings> loadSettings(void* rm, LPCTSTR configFile) {
+    static std::unique_ptr<Settings> loadSettings(void* rm, LPCWSTR routerID, LPCTSTR configFile) {
         WCHAR loginW[256]{};
         WCHAR passwordW[256]{};
         WCHAR urlW[256]{};
         WCHAR proxyW[256]{};
-        WCHAR interfaceW[256]{};
+        WCHAR interfaceW[1024]{};
 
-        GetPrivateProfileString(L"KeeneticPlugin", L"URL", L"http://192.168.1.1", urlW, 256, rmDataFile);
-        GetPrivateProfileString(L"KeeneticPlugin", L"Login", L"admin", loginW, 256, rmDataFile);
-        GetPrivateProfileString(L"KeeneticPlugin", L"Password", L"", passwordW, 256, rmDataFile);
-        GetPrivateProfileString(L"KeeneticPlugin", L"Proxy", L"", proxyW, 256, rmDataFile);
-        GetPrivateProfileString(L"KeeneticPlugin", L"Interface", L"ISP", interfaceW, 256, rmDataFile);
+        GetPrivateProfileString(routerID, L"URL", L"http://192.168.1.1", urlW, 256, configFile);
+        GetPrivateProfileString(routerID, L"Login", L"admin", loginW, 256, configFile);
+        GetPrivateProfileString(routerID, L"Password", L"", passwordW, 256, configFile);
+        GetPrivateProfileString(routerID, L"Proxy", L"", proxyW, 256, configFile);
+        GetPrivateProfileString(routerID, L"Interface", L"ISP", interfaceW, 1024, configFile);
 
         if (!lstrlen(passwordW)) {
-            RmLog(rm, LOG_ERROR, (std::wstring(L"No password set for KeeneticPlugin in config file ") + rmDataFile).c_str());
+            RmLog(rm, LOG_ERROR, (std::wstring(L"No password set for ") + routerID + std::wstring(L" in config file ") + configFile).c_str());
             return {};
         }
 
         std::unique_ptr<Settings> res = std::make_unique<Settings>();
 
-        res->proxyPort = GetPrivateProfileInt(L"KeeneticPlugin", L"ProxyPort", 8080, rmDataFile);
+        res->proxyPort = GetPrivateProfileInt(routerID, L"ProxyPort", 8080, configFile);
 
         res->routerUrl = IuCoreUtils::WstringToUtf8(urlW);
         res->login = IuCoreUtils::WstringToUtf8(loginW);
         res->password = IuCoreUtils::WstringToUtf8(passwordW);
         res->proxy = IuCoreUtils::WstringToUtf8(proxyW);
-        res->interf = IuCoreUtils::WstringToUtf8(interfaceW);
+        std::string interfaces = IuCoreUtils::WstringToUtf8(interfaceW);
+        IuStringUtils::Split(interfaces, ",", res->interfaces);
         return res;
     }
 };
@@ -112,12 +114,26 @@ public:
         proxyPort_ = port;
     }
 
-    double getUploadSpeed() const {
-        return uploadSpeed_;
+    double getUploadSpeed(const std::string& interf) const {
+        if (!interf.empty()) {
+            auto it = uploadSpeed_.find(interf);
+            if (it != uploadSpeed_.end()) {
+                return it->second;
+            }
+            return 0.0;
+        }
+        return uploadSpeed_.empty() ? 0.0: uploadSpeed_.begin()->second;
     }
 
-    double getDownloadSpeed() const {
-        return downloadSpeed_;
+    double getDownloadSpeed(const std::string& interf) const {
+        if (!interf.empty()) {
+            auto it = downloadSpeed_.find(interf);
+            if (it != downloadSpeed_.end()) {
+                return it->second;
+            }
+            return 0.0;
+        }
+        return downloadSpeed_.empty() ? 0.0: downloadSpeed_.begin()->second;
     }
 
 private:
@@ -132,8 +148,8 @@ private:
     std::atomic_bool stopSignal = false;
     std::mutex dataMutex_;
 
-    std::atomic<double> uploadSpeed_ = 0.0;
-    std::atomic<double> downloadSpeed_ = 0.0;
+    std::map<std::string, std::atomic<double>> uploadSpeed_;
+    std::map<std::string, std::atomic<double>> downloadSpeed_;
 
     bool authenticated = false;
 
@@ -194,19 +210,22 @@ private:
         bool success = false;
         nc_->setUrl(settings_->routerUrl + "/rci/");
 
-        Json::Value rrd1;
-        rrd1["name"] = settings_->interf;
-        rrd1["attribute"] = "rxspeed";
-        rrd1["detail"] = 0;
-
-        Json::Value rrd2;
-        rrd2["name"] = settings_->interf;
-        rrd2["attribute"] = "txspeed";
-        rrd2["detail"] = 0;
-
         Json::Value rrd(Json::arrayValue);
-        rrd.append(rrd1);
-        rrd.append(rrd2);
+
+        for(auto& el: settings_->interfaces) {
+            Json::Value rrd1;
+            rrd1["name"] = el;
+            rrd1["attribute"] = "rxspeed";
+            rrd1["detail"] = 0;
+
+            Json::Value rrd2;
+            rrd2["name"] = el;
+            rrd2["attribute"] = "txspeed";
+            rrd2["detail"] = 0;
+
+            rrd.append(rrd1);
+            rrd.append(rrd2);
+        }
 
         Json::Value root;
         root["show"]["interface"]["rrd"] = rrd;
@@ -215,10 +234,6 @@ private:
         builder["commentStyle"] = "None";
         builder["indentation"] = "   ";
         std::string s = Json::writeString(builder, root);
-
-        /*std::string s =
-            R"({"show":{"interface":{"rrd":[{"name":"ISP","attribute":"rxspeed","detail":0},{"name":"ISP","attribute":"txspeed","detail":0}]}}})";
-        */
 
         nc_->addQueryHeader("Content-Type", "application/json");
         nc_->doPost(s);
@@ -232,33 +247,36 @@ private:
                     if (rrdObj.isArray()) {
                         //int index = measure->mt == MeasureType::mtUpload ? 1 : 0;
                         std::unique_lock<std::mutex> lk(dataMutex_);
+                        for (size_t i = 0; i < settings_->interfaces.size(); ++i)  {
+                            auto& interf = settings_->interfaces[i];
+                            int offset = i * 2;
+                            Json::Value& status = rrdObj[offset]["status"];
 
-                        Json::Value& status = rrdObj[0]["status"];
+                            if (status.isArray() && status[0]["status"] == "error") {
+                                std::wstring msg = std::wstring(L"Server answered with error: ") +
+                                    IuCoreUtils::Utf8ToWstring(status[0]["message"].asCString());
+                                RmLog(rm_, LOG_ERROR, msg.c_str());
+                            }
 
-                        if (status.isArray() && status[0]["status"] == "error") {
-                            std::wstring msg = std::wstring(L"Server answered with error: ") +
-                                IuCoreUtils::Utf8ToWstring(status[0]["message"].asCString());
-                            RmLog(rm_, LOG_ERROR, msg.c_str());
-                        }
+                            Json::Value& data2 = rrdObj[offset]["data"];
 
-                        Json::Value& data2 = rrdObj[0]["data"];
+                            if (!data2.empty()) {
+                                Json::Value download = *data2.begin();
+                                downloadSpeed_[interf] = download["v"].asDouble() / 1000000.0;
+                            }
 
-                        if (!data2.empty()) {
-                            Json::Value download = *data2.begin();
-                            downloadSpeed_ = download["v"].asDouble() / 1000000.0;
-                        }
+                            Json::Value& status2 = rrdObj[offset+1]["status"];
+                            if (status2.isArray() && status2[0]["status"] == "error") {
+                                std::wstring msg = std::wstring(L"Server answered with error: ") +
+                                    IuCoreUtils::Utf8ToWstring(status2[0]["message"].asCString());
+                                RmLog(rm_, LOG_ERROR, msg.c_str());
+                            }
 
-                        Json::Value& status2 = rrdObj[1]["status"];
-                        if (status2.isArray() && status2[0]["status"] == "error") {
-                            std::wstring msg = std::wstring(L"Server answered with error: ") +
-                                IuCoreUtils::Utf8ToWstring(status2[0]["message"].asCString());
-                            RmLog(rm_, LOG_ERROR, msg.c_str());
-                        }
-
-                        Json::Value& data3 = rrdObj[1]["data"];
-                        if (!data3.empty()) {
-                            Json::Value upload = *data3.begin();
-                            uploadSpeed_ = upload["v"].asDouble() / 1000000.0;
+                            Json::Value& data3 = rrdObj[offset+1]["data"];
+                            if (!data3.empty()) {
+                                Json::Value upload = *data3.begin();
+                                uploadSpeed_[interf] = upload["v"].asDouble() / 1000000.0;
+                            }
                         }
                         success = true;
                     }
@@ -278,8 +296,8 @@ private:
         }
 
         if (!success) {
-            downloadSpeed_ = 0.0;
-            uploadSpeed_ = 0.0;
+            downloadSpeed_.clear();
+            uploadSpeed_.clear();
         }
     }
 };
@@ -287,29 +305,29 @@ private:
 struct Measure {
     MeasureType mt = MeasureType::mtDownload;
     void* rm = nullptr;
+    std::wstring routerID;
+    std::string interf;
     std::shared_ptr<Worker> worker;
 };
-std::shared_ptr<Worker> worker;
 
+std::map<std::wstring,std::weak_ptr<Worker>> workers;
 
 PLUGIN_EXPORT void Initialize(void** data, void* rm) {
-
     auto* measure = new Measure;
     *data = measure;
-
-    if (rmDataFile == nullptr) {
-        rmDataFile = RmGetSettingsFile();
-    }
-
+    LPCWSTR rmDataFile = RmGetSettingsFile();
+    LPCWSTR routerID = RmReadString(rm, L"Router", L"KeeneticPlugin");
+    std::shared_ptr<Worker> worker = workers[routerID].lock();
     if (!worker) {
-        std::shared_ptr<Settings> settings = SettingsLoader::loadSettings(rm, rmDataFile);
+        std::shared_ptr<Settings> settings = SettingsLoader::loadSettings(rm, routerID, rmDataFile);
         if (!settings) {
             return;
         }
-        worker = std::make_shared<Worker>(rm, settings);
+        workers[routerID] = worker = std::make_shared<Worker>(rm, settings);
         worker->start();
     }
     measure->worker = worker;
+    measure->routerID = routerID;
 }
 
 PLUGIN_EXPORT void Reload(void* data, void* rm, double* maxValue) {
@@ -321,6 +339,11 @@ PLUGIN_EXPORT void Reload(void* data, void* rm, double* maxValue) {
         std::wstring val = value;
         measure->mt = val == L"upload" ? MeasureType::mtUpload : MeasureType::mtDownload;
     }
+
+    LPCWSTR interf = RmReadString(rm, L"Interface", L"");
+    if (interf) {
+        measure->interf = IuCoreUtils::WstringToUtf8(interf);
+    }
 }
 
 PLUGIN_EXPORT double Update(void* data) {
@@ -328,7 +351,8 @@ PLUGIN_EXPORT double Update(void* data) {
     if (!measure->worker) {
         return {};
     }
-    return measure->mt == MeasureType::mtDownload ? measure->worker->getDownloadSpeed() : measure->worker->getUploadSpeed();
+    return measure->mt == MeasureType::mtDownload ? measure->worker->getDownloadSpeed(measure->interf)
+        : measure->worker->getUploadSpeed(measure->interf);
 }
 
 PLUGIN_EXPORT void Finalize(void* data) {
@@ -337,5 +361,4 @@ PLUGIN_EXPORT void Finalize(void* data) {
         measure->worker->abort();
     }
     delete measure;
-    worker.reset();
 }
