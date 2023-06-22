@@ -71,6 +71,14 @@ public:
         settings_ = std::move(settings);
     }
 
+    ~Worker() {
+        try {
+            abort();
+        } catch(...) {
+            
+        }
+    }
+
     void start() {
         if (started_) {
             return;
@@ -100,6 +108,9 @@ public:
             Sleep(1000);
         }
         logout();
+        std::unique_lock<std::mutex> lk(dataMutex_);
+        downloadSpeed_.clear();
+        uploadSpeed_.clear();
         nc_ = nullptr;
     }
 
@@ -115,6 +126,7 @@ public:
     }
 
     double getUploadSpeed(const std::string& interf) const {
+        std::unique_lock<std::mutex> lk(dataMutex_);
         if (!interf.empty()) {
             auto it = uploadSpeed_.find(interf);
             if (it != uploadSpeed_.end()) {
@@ -126,6 +138,7 @@ public:
     }
 
     double getDownloadSpeed(const std::string& interf) const {
+        std::unique_lock<std::mutex> lk(dataMutex_);
         if (!interf.empty()) {
             auto it = downloadSpeed_.find(interf);
             if (it != downloadSpeed_.end()) {
@@ -146,7 +159,7 @@ private:
     
     int proxyPort_ = 0;
     std::atomic_bool stopSignal = false;
-    std::mutex dataMutex_;
+    mutable std::mutex dataMutex_;
 
     std::map<std::string, std::atomic<double>> uploadSpeed_;
     std::map<std::string, std::atomic<double>> downloadSpeed_;
@@ -296,6 +309,7 @@ private:
         }
 
         if (!success) {
+            std::unique_lock<std::mutex> lk(dataMutex_);
             downloadSpeed_.clear();
             uploadSpeed_.clear();
         }
@@ -357,8 +371,12 @@ PLUGIN_EXPORT double Update(void* data) {
 
 PLUGIN_EXPORT void Finalize(void* data) {
     auto* measure = static_cast<Measure*>(data);
-    if (measure->worker) {
+    // Worker belongs to at least two "Measures".
+    // Worker thread will exit on destruction, no need to call here.
+    // TODO: Reload settings on skin refresh
+    /*
+     * if (measure->worker) {
         measure->worker->abort();
-    }
+    }*/
     delete measure;
 }
