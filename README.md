@@ -75,18 +75,18 @@ To build this plugin from source files you will need:
 - Git https://git-scm.com/downloads
 - Microsoft Visual Studio 2019 or newer (with C++ compiler) https://visualstudio.microsoft.com/downloads/
 - Python 3 https://www.python.org/downloads/
-- Conan (C++ package manager) https://conan.io/
+- Conan 2.x (C++ package manager) https://conan.io/
 
 ## Building dependencies
 
 Run the following commands:
 
 ```bash
-conan install . -g visual_studio_multi -s arch=x86 -s build_type=Release --build=missing -s compiler.runtime=MT
-conan install . -g visual_studio_multi -s arch=x86_64 -s build_type=Release --build=missing -s compiler.runtime=MT
+conan install . -g MSBuildDeps -s arch=x86 -s build_type=Release --build=missing -s compiler.runtime=static
+conan install . -g MSBuildDeps -s arch=x86_64 -s build_type=Release --build=missing -s compiler.runtime=static
   
-conan install . -g visual_studio_multi -s arch=x86 -s build_type=Debug --build=missing -s compiler.runtime=MTd
-conan install . -g visual_studio_multi -s arch=x86_64 -s build_type=Debug --build=missing -s compiler.runtime=MTd
+conan install . -g MSBuildDeps -s arch=x86 -s build_type=Debug --build=missing -s compiler.runtime=static
+conan install . -g MSBuildDeps -s arch=x86_64 -s build_type=Debug --build=missing -s compiler.runtime=static
 ```
 
 You can now load conanbuildinfo_multi.props in your Visual Studio IDE property manager, and all configurations will be loaded at once.

@@ -1,12 +1,12 @@
 [requires]
-libcurl/7.87.0
-jsoncpp/1.9.5
+libcurl/8.11.1
+jsoncpp/1.9.6
 utfcpp/3.2.1
 
 [generators]
-visual_studio_multi
+MSBuildDeps
 
 [options]
-libcurl:with_ssl=schannel
-libcurl:shared=False
-jsoncpp:shared=False
+libcurl/*:with_ssl=schannel
+libcurl/*:shared=False
+jsoncpp/*:shared=False
