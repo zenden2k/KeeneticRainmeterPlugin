@@ -68,6 +68,20 @@ Router=MyRouter
 
 The default value for the Router option is "KeeneticPlugin". 
 
+## Custom command
+
+You can use custom command of the router REST interface. The interface name is passed as argument.
+
+```
+[KeeneticPlugin]
+Command=show/interface
+DownloadField=ds_fast_rate
+UploadField=us_fast_rate
+DownloadDivider=1000
+UploadDivider=1000
+;RequestType=GET
+```
+
 ## Building from sources
 
 To build this plugin from source files you will need:

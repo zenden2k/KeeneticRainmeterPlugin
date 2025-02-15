@@ -5,10 +5,21 @@
 #include <map>
 
 #include <json/json.h>
+#include <json/value.h>
 #include "Core/Network/NetworkClient.h"
 #include "API/RainmeterAPI.h"
 #include "Core/Utils/CryptoUtils.h"
 #include "Core/Utils/StringUtils.h"
+
+double GetPrivateProfileDouble(LPCTSTR section, LPCTSTR key, double def, LPCTSTR path)
+{
+    TCHAR buf[100];
+    ::GetPrivateProfileString(section, key, L"NOTFOUND", buf, sizeof(buf), path);
+
+    if (::wcscmp(buf, L"NOTFOUND") == 0 || ::wcscmp(buf, L"") == 0)
+        return def;
+    return ::_wtof(buf);
+}
 
 enum class MeasureType
 {
@@ -23,6 +34,13 @@ struct Settings{
     std::string login;
     std::string password;
     std::string proxy;
+    std::string command;
+    std::string requestType;
+    std::string downloadFieldJsonPath;
+    std::string uploadFieldJsonPath;
+    double downloadDivider;
+    double uploadDivider;
+
     std::vector<std::string> interfaces;
     int proxyPort = 0;
 };
@@ -36,12 +54,22 @@ public:
         WCHAR urlW[256]{};
         WCHAR proxyW[256]{};
         WCHAR interfaceW[1024]{};
+        WCHAR commandW[256] {};
+        WCHAR requestTypeW[50] {};
+        WCHAR downloadFieldW[256] {};
+        WCHAR uploadFieldW[256] {};
 
-        GetPrivateProfileString(routerID, L"URL", L"http://192.168.1.1", urlW, 256, configFile);
-        GetPrivateProfileString(routerID, L"Login", L"admin", loginW, 256, configFile);
-        GetPrivateProfileString(routerID, L"Password", L"", passwordW, 256, configFile);
-        GetPrivateProfileString(routerID, L"Proxy", L"", proxyW, 256, configFile);
-        GetPrivateProfileString(routerID, L"Interface", L"ISP", interfaceW, 1024, configFile);
+
+        GetPrivateProfileString(routerID, L"URL", L"http://192.168.1.1", urlW, std::size(urlW), configFile);
+        GetPrivateProfileString(routerID, L"Login", L"admin", loginW, std::size(loginW), configFile);
+        GetPrivateProfileString(routerID, L"Password", L"", passwordW, std::size(passwordW), configFile);
+        GetPrivateProfileString(routerID, L"Proxy", L"", proxyW, std::size(proxyW), configFile);
+        GetPrivateProfileString(routerID, L"Interface", L"ISP", interfaceW, std::size(interfaceW), configFile);
+        GetPrivateProfileString(routerID, L"Command", L"", commandW, std::size(commandW), configFile);
+        GetPrivateProfileString(routerID, L"RequestType", L"", requestTypeW, std::size(requestTypeW), configFile);
+        GetPrivateProfileString(routerID, L"DownloadField", L"", downloadFieldW, std::size(downloadFieldW), configFile);
+        GetPrivateProfileString(routerID, L"UploadField", L"", uploadFieldW, std::size(uploadFieldW), configFile);
+        
 
         if (!lstrlen(passwordW)) {
             RmLog(rm, LOG_ERROR, (std::wstring(L"No password set for ") + routerID + std::wstring(L" in config file ") + configFile).c_str());
@@ -49,6 +77,8 @@ public:
         }
 
         std::unique_ptr<Settings> res = std::make_unique<Settings>();
+        res->downloadDivider = GetPrivateProfileDouble(routerID, L"DownloadDivider", 1000000.0, configFile);
+        res->uploadDivider = GetPrivateProfileDouble(routerID, L"UploadDivider", 1000000.0, configFile);
 
         res->proxyPort = GetPrivateProfileInt(routerID, L"ProxyPort", 8080, configFile);
 
@@ -56,6 +86,10 @@ public:
         res->login = IuCoreUtils::WstringToUtf8(loginW);
         res->password = IuCoreUtils::WstringToUtf8(passwordW);
         res->proxy = IuCoreUtils::WstringToUtf8(proxyW);
+        res->command = IuCoreUtils::WstringToUtf8(commandW);
+        res->requestType = IuCoreUtils::WstringToUtf8(requestTypeW);
+        res->downloadFieldJsonPath = IuCoreUtils::WstringToUtf8(downloadFieldW);
+        res->uploadFieldJsonPath = IuCoreUtils::WstringToUtf8(uploadFieldW);
         std::string interfaces = IuCoreUtils::WstringToUtf8(interfaceW);
         IuStringUtils::Split(interfaces, ",", res->interfaces);
         return res;
@@ -221,78 +255,109 @@ private:
 
     void loadData() {
         bool success = false;
-        nc_->setUrl(settings_->routerUrl + "/rci/");
+        nc_->setUrl(settings_->routerUrl + "/rci/" + (settings_->command.empty() ? "show/interface/rrd" : settings_->command));
+        bool isCustomRequest = !settings_->command.empty();
+        std::string requestBody;
+        Json::Value root(Json::arrayValue);
+        if (!isCustomRequest) {
+            for (auto& el : settings_->interfaces) {
+                Json::Value rrd1;
+                rrd1["name"] = el;
+                rrd1["attribute"] = "rxspeed";
+                rrd1["detail"] = 0;
 
-        Json::Value rrd(Json::arrayValue);
+                Json::Value rrd2;
+                rrd2["name"] = el;
+                rrd2["attribute"] = "txspeed";
+                rrd2["detail"] = 0;
 
-        for(auto& el: settings_->interfaces) {
-            Json::Value rrd1;
-            rrd1["name"] = el;
-            rrd1["attribute"] = "rxspeed";
-            rrd1["detail"] = 0;
-
-            Json::Value rrd2;
-            rrd2["name"] = el;
-            rrd2["attribute"] = "txspeed";
-            rrd2["detail"] = 0;
-
-            rrd.append(rrd1);
-            rrd.append(rrd2);
+                root.append(rrd1);
+                root.append(rrd2);
+            }
+        } else {
+            for (auto& el : settings_->interfaces) {
+                Json::Value item;
+                item["name"] = el;
+                root.append(item);
+            }
         }
 
-        Json::Value root;
-        root["show"]["interface"]["rrd"] = rrd;
+        if (settings_->requestType.empty()) {
+            Json::StreamWriterBuilder builder;
+            builder["commentStyle"] = "None";
+            builder["indentation"] = "   ";
+            requestBody = Json::writeString(builder, root);
 
-        Json::StreamWriterBuilder builder;
-        builder["commentStyle"] = "None";
-        builder["indentation"] = "   ";
-        std::string s = Json::writeString(builder, root);
-
-        nc_->addQueryHeader("Content-Type", "application/json");
-        nc_->doPost(s);
-
+            nc_->addQueryHeader("Content-Type", "application/json");
+            nc_->doPost(requestBody);
+        } else if (settings_->requestType == "GET") {
+            nc_->doGet({});
+        } else {
+            nc_->setMethod(settings_->requestType);
+            nc_->doPost(requestBody);
+        }
+    
         if (nc_->responseCode() == 200) {
             Json::Value val;
             Json::Reader reader;
             if (reader.parse(nc_->responseBody(), val, false)) {
                 try {
-                    Json::Value& rrdObj = val["show"]["interface"]["rrd"];
+                    Json::Value& rrdObj = val;
+
                     if (rrdObj.isArray()) {
                         //int index = measure->mt == MeasureType::mtUpload ? 1 : 0;
                         std::unique_lock<std::mutex> lk(dataMutex_);
-                        for (size_t i = 0; i < settings_->interfaces.size(); ++i)  {
+                        for (int i = 0; i < settings_->interfaces.size(); ++i)  {
+
                             auto& interf = settings_->interfaces[i];
-                            int offset = i * 2;
-                            Json::Value& status = rrdObj[offset]["status"];
 
-                            if (status.isArray() && status[0]["status"] == "error") {
-                                std::wstring msg = std::wstring(L"Server answered with error: ") +
-                                    IuCoreUtils::Utf8ToWstring(status[0]["message"].asCString());
-                                RmLog(rm_, LOG_ERROR, msg.c_str());
-                            }
+                            if (isCustomRequest) {
+                                if (!settings_->downloadFieldJsonPath.empty()) {
+                                    Json::Path p(settings_->downloadFieldJsonPath);
+                                    Json::Value res = p.resolve(rrdObj[i]);
+                                    std::string str = res.asString();
+                                    
+                                    downloadSpeed_[interf] = atof(str.c_str()) / settings_->downloadDivider;
+                                }
+                                if (!settings_->uploadFieldJsonPath.empty()) {
+                                    Json::Path p(settings_->uploadFieldJsonPath);
+                                    Json::Value res = p.resolve(rrdObj[i]);
+                                    std::string str = res.asString();
 
-                            Json::Value& data2 = rrdObj[offset]["data"];
+                                    uploadSpeed_[interf] = atof(str.c_str()) / settings_->uploadDivider;
+                                }
+                            } else {
 
-                            if (!data2.empty()) {
-                                Json::Value download = *data2.begin();
-                                downloadSpeed_[interf] = download["v"].asDouble() / 1000000.0;
-                            }
+                                int offset = static_cast<int>(i * 2);
+                                Json::Value& status = rrdObj[offset]["status"];
 
-                            Json::Value& status2 = rrdObj[offset+1]["status"];
-                            if (status2.isArray() && status2[0]["status"] == "error") {
-                                std::wstring msg = std::wstring(L"Server answered with error: ") +
-                                    IuCoreUtils::Utf8ToWstring(status2[0]["message"].asCString());
-                                RmLog(rm_, LOG_ERROR, msg.c_str());
-                            }
+                                if (status.isArray() && status[0]["status"] == "error") {
+                                    std::wstring msg = std::wstring(L"Server answered with error: ") + IuCoreUtils::Utf8ToWstring(status[0]["message"].asCString());
+                                    RmLog(rm_, LOG_ERROR, msg.c_str());
+                                }
 
-                            Json::Value& data3 = rrdObj[offset+1]["data"];
-                            if (!data3.empty()) {
-                                Json::Value upload = *data3.begin();
-                                uploadSpeed_[interf] = upload["v"].asDouble() / 1000000.0;
+                                Json::Value& data2 = rrdObj[offset]["data"];
+
+                                if (!data2.empty()) {
+                                    Json::Value download = *data2.begin();
+                                    downloadSpeed_[interf] = download["v"].asDouble() / settings_->downloadDivider;
+                                }
+
+                                Json::Value& status2 = rrdObj[offset + 1]["status"];
+                                if (status2.isArray() && status2[0]["status"] == "error") {
+                                    std::wstring msg = std::wstring(L"Server answered with error: ") + IuCoreUtils::Utf8ToWstring(status2[0]["message"].asCString());
+                                    RmLog(rm_, LOG_ERROR, msg.c_str());
+                                }
+
+                                Json::Value& data3 = rrdObj[offset + 1]["data"];
+                                if (!data3.empty()) {
+                                    Json::Value upload = *data3.begin();
+                                    uploadSpeed_[interf] = upload["v"].asDouble() / settings_->uploadDivider;
+                                }
                             }
                         }
                         success = true;
-                    }
+                    } 
                 } catch (const std::exception& ex) {
                     RmLog(rm_, LOG_ERROR, IuCoreUtils::Utf8ToWstring(ex.what()).c_str());
                 }
