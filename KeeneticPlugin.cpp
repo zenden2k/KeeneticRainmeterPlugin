@@ -13,11 +13,12 @@
 
 double GetPrivateProfileDouble(LPCTSTR section, LPCTSTR key, double def, LPCTSTR path)
 {
-    TCHAR buf[100];
-    ::GetPrivateProfileString(section, key, L"NOTFOUND", buf, sizeof(buf), path);
+    TCHAR buf[100] {'\0'};
+    ::GetPrivateProfileString(section, key, L"NOTFOUND", buf, std::size(buf), path);
 
-    if (::wcscmp(buf, L"NOTFOUND") == 0 || ::wcscmp(buf, L"") == 0)
+    if (::wcscmp(buf, L"NOTFOUND") == 0 || ::wcscmp(buf, L"") == 0) {
         return def;
+    }
     return ::_wtof(buf);
 }
 
@@ -38,8 +39,8 @@ struct Settings{
     std::string requestType;
     std::string downloadFieldJsonPath;
     std::string uploadFieldJsonPath;
-    double downloadDivider;
-    double uploadDivider;
+    double downloadDivider{};
+    double uploadDivider{};
 
     std::vector<std::string> interfaces;
     int proxyPort = 0;
@@ -314,14 +315,14 @@ private:
                             if (isCustomRequest) {
                                 if (!settings_->downloadFieldJsonPath.empty()) {
                                     Json::Path p(settings_->downloadFieldJsonPath);
-                                    Json::Value res = p.resolve(rrdObj[i]);
+                                    const Json::Value& res = p.resolve(rrdObj[i]);
                                     std::string str = res.asString();
                                     
                                     downloadSpeed_[interf] = atof(str.c_str()) / settings_->downloadDivider;
                                 }
                                 if (!settings_->uploadFieldJsonPath.empty()) {
                                     Json::Path p(settings_->uploadFieldJsonPath);
-                                    Json::Value res = p.resolve(rrdObj[i]);
+                                    const Json::Value& res = p.resolve(rrdObj[i]);
                                     std::string str = res.asString();
 
                                     uploadSpeed_[interf] = atof(str.c_str()) / settings_->uploadDivider;
