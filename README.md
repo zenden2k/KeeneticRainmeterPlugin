@@ -7,7 +7,7 @@ A speed graph for Keenetic routers, displayed directly on your Windows desktop.
 
 First, you need to install [Rainmeter](https://www.rainmeter.net/) on your computer. Then, download and install the `.rmskin` file, which is available in the [Releases](https://github.com/zenden2k/KeeneticRainmeterPlugin/releases) section.
 
-After installation, you should specify the password for your Keenetic user in the `Rainmeter.data` file (which is located by default in the `C:\Users\user\AppData\Roaming\Rainmeter` folder).  
+After installation, you should specify the password for your Keenetic user in the `Rainmeter.data` file, which is located by default in the `%appdata%\Rainmeter` folder (for ex. `C:\Users\user\AppData\Roaming\Rainmeter`).
 You can also specify the username and the URL of the router's web interface.
 
 
